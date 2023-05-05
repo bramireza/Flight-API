@@ -1,0 +1,28 @@
+{
+  "name": "fligth-api",
+  "version": "1.0.0",
+  "description": "API REST, desarrollado en Node, con un solo endpoint que permita consultar por el ID del vuelo y retornar la simulacion",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bramireza/Fligth-API.git"
+  },
+  "keywords": [
+    "API",
+    "Node"
+  ],
+  "author": "@bramireza",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/bramireza/Fligth-API/issues"
+  },
+  "homepage": "https://github.com/bramireza/Fligth-API#readme",
+  "dependencies": {
+    "express": "^4.18.2",
+    "mysql": "^2.18.1"
+  }
+}
