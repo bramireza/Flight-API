@@ -1,8 +1,8 @@
 import { Router } from "express";
-import { getFligths } from "../controllers/flightController.js";
+import * as flightController from "../controllers/flightController.js";
 
 const fligthRouter = Router();
 
-fligthRouter.get("/", getFligths);
+fligthRouter.get("/:id/passengers", flightController.getFlightCheckin);
 
 export default fligthRouter;
