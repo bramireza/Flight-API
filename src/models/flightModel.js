@@ -1,9 +1,13 @@
 import { pool } from "../config/database.js";
 
-export const getFligth = async () => {
+export const getFlightById = async (flightId) => {
   try {
-    const [rows] = await pool.query("SELECT * FROM flight");
-    return rows;
+    const query = `
+      SELECT * FROM flight
+      WHERE flight_id = ?
+      `;
+    const [rows] = await pool.query(query, flightId);
+    return rows[0];
   } catch (error) {
     throw error;
   }

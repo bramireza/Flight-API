@@ -1,9 +1,9 @@
 import fligthRouter from "./flightRoutes.js";
 
-const routes = [["fligth", fligthRouter]];
+const routes = [["fligths", fligthRouter]];
 
 export const router = (app) => {
   routes.forEach(([path, controller]) => {
-    app.use(`/api/v1/${path}`, controller);
+    app.use(`/${path}`, controller);
   });
 };
