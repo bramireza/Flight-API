@@ -1,5 +1,5 @@
 import { Router } from "express";
-import * as flightController from "../controllers/flightController2.js";
+import * as flightController from "../controllers/flightController.js";
 
 const fligthRouter = Router();
 
