@@ -12,11 +12,13 @@ const snakeToCamelCase = (data) => {
     const camelCaseData = {};
 
     for (const key in data) {
-      if (Object.prototype.hasOwnProperty.call(data, key)) {
+      if (key.includes("_")) {
         const camelCaseKey = key.replace(/([-_]\w)/g, (match) =>
           match.charAt(1).toUpperCase()
         );
         camelCaseData[camelCaseKey] = snakeToCamelCase(data[key]);
+      } else {
+        camelCaseData[key] = data[key];
       }
     }
 
@@ -38,32 +40,63 @@ const findAvailableSeat = (
   occupiedSeats
 ) => {
   const { seat_row: row, seat_column: column } = companionSeat;
-  let availableSeats = [];
-
-  for (const offset of adjacentOffsets) {
+  let availableSeats = adjacentOffsets.reduce((acc, offset) => {
     const newRow = row + offset.row;
     const newColumn = String.fromCharCode(column.charCodeAt(0) + offset.column);
     const adjacentSeat = allSeats.find(
       (seat) =>
-        seat.seat_row == newRow &&
-        seat.seat_column == newColumn &&
-        seat.seat_type_id == seatTypeId &&
+        seat.seat_row === newRow &&
+        seat.seat_column === newColumn &&
+        seat.seat_type_id === seatTypeId &&
         !occupiedSeats.has(seat.seat_id)
     );
 
-    if (adjacentSeat) {
-      availableSeats.push(adjacentSeat);
-    }
-  }
-  if (!(availableSeats.length > 0)) {
-    availableSeats = allSeats.filter(
-      (seat) =>
-        seat.seat_type_id == seatTypeId && !occupiedSeats.has(seat.seat_id)
-    );
-  }
-  return availableSeats[randomArrayIndex(availableSeats)];
+    if (adjacentSeat) acc.push(adjacentSeat);
+
+    return acc;
+  }, []);
+
+  return availableSeats.length > 0
+    ? availableSeats[randomArrayIndex(availableSeats)]
+    : null;
 };
 
+// Find the first adult passenger with a seat
+const findAdultWithSeat = (boardingPass) =>
+  boardingPass.find((adult) => adult.seat_id && adult.age >= 18);
+
+// Find the first adult passenger
+const findFirstAdult = (boardingPass) =>
+  boardingPass.find((passenger) => passenger.age >= 18);
+
+// Assign Seat to Passenger
+const assignSeatToPassenger = (
+  passenger,
+  selectedSeat,
+  occupiedSeats,
+  boardingPass
+) => {
+  // Asign seat to passenger
+  passenger.seat_id = selectedSeat.seat_id;
+  occupiedSeats.add(selectedSeat.seat_id);
+
+  //Assign seat in original array
+  const passengerBoardingPass = boardingPass.find(
+    (bp) => bp.passenger_id === passenger.passenger_id
+  );
+
+  if (passengerBoardingPass) {
+    passengerBoardingPass.seat_id = selectedSeat.seat_id;
+  }
+};
+
+// Remove key flightId from boardingPass
+const removeFlightIdFromBoardingPass = (boardingPass) => {
+  return boardingPass.map((pass) => {
+    const { flight_id, ...rest } = pass;
+    return rest;
+  });
+};
 // Main function to get check in by flight
 export const getFlightCheckin = async (req, res) => {
   try {
@@ -82,10 +115,9 @@ export const getFlightCheckin = async (req, res) => {
     );
     const allSeats = await seatModel.getSeatsByAirplaneId(flight.airplane_id);
 
-    const occupiedSeats = new Set();
-    boardingPass.forEach((bp) => {
-      if (bp.seat_id) occupiedSeats.add(bp.seat_id);
-    });
+    const occupiedSeats = new Set(
+      boardingPass.filter((bp) => bp.seat_id).map((bp) => bp.seat_id)
+    );
 
     // Boarding Pass grouped by purchase
     const groupedBoardingPass = boardingPass.reduce((acc, bp) => {
@@ -97,16 +129,12 @@ export const getFlightCheckin = async (req, res) => {
     for (let purchaseId in groupedBoardingPass) {
       const boardingPassByPurchase = groupedBoardingPass[purchaseId];
 
-      // Find an adult passenger with seat
-      let adultWithSeat = boardingPassByPurchase.find(
-        (adult) => adult.seat_id && adult.age >= 18
-      );
+      const adultWithSeat = findAdultWithSeat(boardingPassByPurchase);
 
-      // If an adult with a seat not found, assign a random seat to the first adult
+      // Assign seat to adult without seat
       if (!adultWithSeat) {
-        const selectedAdult = boardingPassByPurchase.find(
-          (adult) => adult.age >= 18
-        );
+        const selectedAdult = findFirstAdult(boardingPassByPurchase);
+
         const availableSeats = allSeats.filter(
           (seat) =>
             !occupiedSeats.has(seat.seat_id) &&
@@ -114,16 +142,13 @@ export const getFlightCheckin = async (req, res) => {
         );
         const selectedSeat = availableSeats[randomArrayIndex(availableSeats)];
 
-        selectedAdult.seat_id = selectedSeat.seat_id;
-        occupiedSeats.add(selectedSeat.seat_id);
-
-        //Assign seat in original array
-        const passengerBoardingPass = boardingPass.find(
-          (bp) => bp.passenger_id == selectedAdult.passenger_id
-        );
-        if (passengerBoardingPass) {
-          passengerBoardingPass.seat_id = selectedSeat.seat_id;
-        }
+        if (selectedAdult)
+          assignSeatToPassenger(
+            selectedAdult,
+            selectedSeat,
+            occupiedSeats,
+            boardingPass
+          );
       }
 
       // Assign seat all rest passengers
@@ -162,36 +187,50 @@ export const getFlightCheckin = async (req, res) => {
                 occupiedSeats
               );
               if (selectedSeat) {
-                // Asign seat to passenger and break de loop
-                passenger.seat_id = selectedSeat.seat_id;
-                occupiedSeats.add(selectedSeat.seat_id);
-
-                //Assign seat in original array
-                const passengerBoardingPass = boardingPass.find(
-                  (bp) => bp.passenger_id == passenger.passenger_id
+                assignSeatToPassenger(
+                  passenger,
+                  selectedSeat,
+                  occupiedSeats,
+                  boardingPass
                 );
-                if (passengerBoardingPass) {
-                  passengerBoardingPass.seat_id = selectedSeat.seat_id;
-                }
               }
             }
           }
         });
+
+        // Assign seat to passenger when there are no adjacent seats
+        if (!passenger.seat_id) {
+          let availableSeats = allSeats.filter(
+            (seat) =>
+              seat.seat_type_id == passenger.seat_type_id &&
+              !occupiedSeats.has(seat.seat_id)
+          );
+
+          let selectedSeat = availableSeats[randomArrayIndex(availableSeats)];
+          if (selectedSeat) {
+            assignSeatToPassenger(
+              passenger,
+              selectedSeat,
+              occupiedSeats,
+              boardingPass
+            );
+          }
+        }
       }
     }
 
     // Sort boarding pass by seat_id
-    boardingPass.sort((a, b) => {
-      if (a.seat_id < b.seat_id) return -1;
-      if (a.seat_id > b.seat_id) return 1;
-      return 0;
-    });
+    boardingPass.sort((a, b) =>
+      a.seat_id < b.seat_id ? -1 : a.seat_id > b.seat_id ? 1 : 0
+    );
+
+    const newBoardingPass = removeFlightIdFromBoardingPass(boardingPass);
 
     res.status(200).json({
       code: 200,
       data: {
         ...snakeToCamelCase(flight),
-        passengers: snakeToCamelCase(boardingPass),
+        passengers: snakeToCamelCase(newBoardingPass),
       },
     });
   } catch (error) {
